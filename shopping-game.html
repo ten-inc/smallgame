@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>数学超市大挑战</title>
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --success-color: #4CAF50;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', system-ui, -apple-system, sans-serif;
+            background: #f0f9ff;
+            margin: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+
+        .difficulty-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            min-width: 100px;
+            touch-action: manipulation;
+        }
+
+        .active-difficulty {
+            background: #ff6b6b;
+        }
+
+        #score {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 1.1rem;
+            background: #ffd700;
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .product-item {
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            text-align: center;
+        }
+
+        .product-item.selected {
+            background: #e3f2fd;
+            box-shadow: 0 0 0 2px var(--primary-color);
+        }
+
+        .product-emoji {
+            font-size: 2.5rem;
+            margin: 5px 0;
+        }
+
+        #rewardModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            text-align: center;
+            z-index: 1000;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .cart-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        #answerInput {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin: 10px 0;
+            inputmode: numeric;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            margin: 5px;
+            width: calc(50% - 10px);
+            touch-action: manipulation;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            .product-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+            .cart-panel {
+                position: static;
+                box-shadow: none;
+                padding: 20px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="score">🍭积分：0</div>
+    <div id="rewardModal">
+        <h2>🎉 恭喜获得棒棒糖奖励！</h2>
+        <div style="font-size: 60px">🍭</div>
+        <button onclick="closeReward()">继续游戏</button>
+    </div>
+    <div class="container">
+        <h1 style="color: #ff6b6b; font-size: 1.5rem; margin: 15px 0;">🛒 数学超市大挑战！</h1>
+        
+        <div>
+            <button class="difficulty-btn" onclick="setDifficulty('easy')">简单模式</button>
+            <button class="difficulty-btn" onclick="setDifficulty('medium')">中等模式</button>
+            <button class="difficulty-btn" onclick="setDifficulty('hard')">困难模式</button>
+        </div>
+
+        <div class="product-grid" id="products"></div>
+    </div>
+
+    <div class="cart-panel">
+        <h3 style="margin: 0 0 10px; font-size: 1.1rem;">📝 购物车（<span id="itemCount">0</span>件）</h3>
+        <p style="margin: 5px 0;">错误次数：<span id="errors">0</span>/5</p>
+        <input type="number" id="answerInput" placeholder="输入总价" inputmode="numeric">
+        <div>
+            <button onclick="checkAnswer()">💰 结账</button>
+            <button onclick="resetGame()" style="background: #ffc107;">🔄 重玩</button>
+        </div>
+        <div id="message" style="margin-top: 10px;"></div>
+    </div>
+
+<script>
+// 系统状态
+let currentDifficulty = 'easy';
+let cart = [];
+let total = 0;
+let errors = 0;
+let score = 0;
+const MAX_ERRORS = 5;
+
+
+// 增强商品数据
+const productsDB = {
+    easy: generateProducts(5, 20),
+    medium: generateProducts(30, 60),
+    hard: generateProducts(70, 100)
+};
+
+function generateProducts(min, max) {
+    const items = [];
+    const baseItems = [
+        {names: '苹果', emoji: '🍎'}, {names: '牛奶', emoji: '🥛'},
+        {names: '饼干', emoji: '🍪'}, {names: '铅笔', emoji: '✏️'},
+        {names: '足球', emoji: '⚽'}, {names: '鲜花', emoji: '💐'},
+        {names: 'T恤', emoji: '👕'}, {names: '绘本', emoji: '📚'},
+        {names: '灯泡', emoji: '💡'}, {names: '蛋糕', emoji: '🎂'}
+    ];
+
+    baseItems.forEach(item => {
+        items.push({
+            ...item,
+            price: Math.floor(Math.random()*(max - min +1)) + min,
+            id: Math.random().toString(36).substr(2, 9)
+        });
+    });
+    return items.slice(0, 10);
+}
+
+// 添加商品逻辑修改
+function addToCart(product) {
+    if (cart.some(item => item.id === product.id)) return;
+    
+    cart.push(product);
+    total += product.price;
+    updateDisplay();
+    updateProductItems();
+}
+
+// 更新商品选中状态
+function updateProductItems() {
+    document.querySelectorAll('.product-item').forEach(item => {
+        const productId = item.dataset.id;
+        item.classList.toggle('selected', cart.some(p => p.id === productId));
+    });
+}
+
+// 生成商品时添加data-id
+function generateProductsByDifficulty() {
+    const container = document.getElementById('products');
+    console.log(productsDB[currentDifficulty]);
+    container.innerHTML = productsDB[currentDifficulty].map(item => `
+        <div class="product-item" 
+             data-id="${item.id}"
+             onclick="addToCart(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <div class="product-emoji">${item.emoji}</div>
+            <div>${item.names}</div>
+            <div>¥${item.price}</div>
+        </div>
+    `).join('');
+}
+
+// 奖励弹窗逻辑
+function showReward() {
+    const modal = document.getElementById('rewardModal');
+    modal.style.display = 'block';
+    
+    // 撒花效果
+    for(let i=0; i<50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = Math.random()*100 + 'vw';
+        confetti.style.animationDelay = Math.random()*2 + 's';
+        confetti.textContent = ['🎉', '🎊', '🍭', '✨'][Math.floor(Math.random()*4)];
+        document.body.appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 3000);
+    }
+}
+
+function closeReward() {
+    document.getElementById('rewardModal').style.display = 'none';
+    document.querySelectorAll('.confetti').forEach(c => c.remove());
+}
+
+// 更新初始化函数
+function initGame() {
+    cart = [];
+    total = 0;
+    errors = 0;
+
+    productsDB[currentDifficulty] = generateProducts( 
+        currentDifficulty === 'easy' ? 5 : 
+        currentDifficulty === 'medium' ? 30 : 70,
+        currentDifficulty === 'easy' ? 20 : 
+        currentDifficulty === 'medium' ? 60 : 100
+    );
+    document.getElementById('answerInput').value = ''; // 确保重置时清空
+    generateProductsByDifficulty();
+    updateDisplay();
+}
+
+
+// 更新界面
+function updateDisplay() {
+    document.getElementById('itemCount').textContent = cart.length;
+    document.getElementById('errors').textContent = errors;
+    document.getElementById('score').textContent = `🍭积分：${score}`;
+}
+
+// 验证答案
+function checkAnswer() {
+    const inputElem = document.getElementById('answerInput');
+    const userAnswer = parseInt(inputElem.value);
+    const messageDiv = document.getElementById('message');
+    inputElem.value = '';
+    
+    if (userAnswer === total) {
+        score += 10;
+        if(score >= 100) {
+            showReward();
+            score = 0; // 重置积分
+        } else {
+            messageDiv.innerHTML = '✅ 正确！继续加油！';
+        }
+        initGame();
+    } else {
+        errors++;
+        if(errors >= MAX_ERRORS) {
+            messageDiv.innerHTML = `❌ 正确答案是 ¥${total}`;
+            initGame();
+        } else {
+            messageDiv.innerHTML = '🔄 再试一次吧！';
+        }
+    }
+    updateDisplay();
+}
+
+// 设置难度
+function setDifficulty(level) {
+    currentDifficulty = level;
+    document.querySelectorAll('.difficulty-btn').forEach(btn => 
+        btn.classList.remove('active-difficulty')
+    );
+    event.target.classList.add('active-difficulty');
+    initGame();
+}
+
+// 重置游戏
+function resetGame() {
+    score = 0;
+    initGame();
+}
+
+// 启动游戏
+initGame();
+</script>
+</body>
+</html>
